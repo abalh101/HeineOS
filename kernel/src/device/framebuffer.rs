@@ -163,6 +163,20 @@ impl Framebuffer {
     /// Scroll the framebuffer content up by the specified number of lines.
     /// The freed space at the bottom is cleared to black.
     pub fn scroll_up(&mut self, lines: usize) {
-        todo!("framebuffer::scroll_up() not implemented yet");
+        let bytes_per_row = self.pitch;
+        //Bytes verschoben Anzahl Pixelzeilen * Bytes pro Zeile
+        let offset_bytes = lines * bytes_per_row;
+        let total_bytes = self.height * bytes_per_row;
+        if offset_bytes >= total_bytes {
+            self.clear();
+            return;
+        }
+        let copy_bytes = total_bytes - offset_bytes;
+        let buffer = self.address as *mut u8;
+
+        unsafe {
+            core::ptr::copy(buffer.add(offset_bytes), buffer, copy_bytes);
+            buffer.add(copy_bytes).write_bytes(0, offset_bytes);
+        }
     }
 }
