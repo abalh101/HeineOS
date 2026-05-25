@@ -7,7 +7,8 @@
  */
 use crate::device::keyboard::KEYBOARD;
 use crate::device::terminal::terminal;
-
+//use crate::println;
+use crate::{print, println};
 /// A simple text demo, displaying formatted numbers.
 pub fn text_demo() {
     println!("Text Demo:");

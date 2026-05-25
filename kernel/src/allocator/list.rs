@@ -7,6 +7,7 @@
  */
 
 use alloc::alloc::{GlobalAlloc, Layout};
+use crate::print;
 use log::info;
 use crate::allocator::global::{align_up, Locked};
 
@@ -59,23 +60,87 @@ impl LinkedListAllocator {
 
     /// Initialize the allocator with the heap bounds given in the constructor.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
-        todo!("list::init() is not implemented yet.")
-    }
+        self.heap_start = heap_start;
+        self.heap_end = heap_start + heap_size;
+        self.add_free_block(heap_start, heap_size);    }
 
     /// Adds the given free memory block 'addr' to the front of the free list.
-    unsafe fn add_free_block(&mut self, addr: usize, size: usize) {
-        todo!("list::add_free_block() is not implemented yet.")
-    }
+   /* unsafe fn add_free_block(&mut self, addr: usize, size: usize) {
+        // Wir erstellen einen neuen Knoten an der Adresse des freigewordenen Speichers
+        let mut node = ListNode::new(size);
+        node.next = self.head.next.take();
+        let node_ptr = addr as *mut ListNode;
+        node_ptr.write(node);
 
+        self.head.next = Some(&mut *node_ptr);
+    }*/
+
+
+    //Zusatzaufgabe
+    unsafe fn add_free_block(&mut self, addr: usize, size: usize) {
+        let mut current = &mut self.head;
+        while let Some(ref mut next) = current.next {
+            if next.start_addr() > addr {
+                break;
+            }
+            current = current.next.as_mut().unwrap();
+        }
+
+        let mut new_size = size;
+        let mut next_ptr = current.next.take(); // Wir nemen den rechten Nachbar kurz aus der Liste
+
+        if let Some(mut next_node) = next_ptr {
+            if addr + size == next_node.start_addr() {
+                new_size += next_node.size;
+                next_ptr = next_node.next.take();
+            } else {
+                next_ptr = Some(next_node);
+            }
+        }
+        if current.size > 0 && current.end_addr() == addr {
+            current.size += new_size;
+            current.next = next_ptr;
+        } else {
+            let mut new_node = ListNode::new(new_size);
+            new_node.next = next_ptr;
+
+            let new_node_ptr = addr as *mut ListNode;
+            new_node_ptr.write(new_node);
+
+            current.next = Some(&mut *new_node_ptr);
+        }
+    }
     /// Search a free block with the given size and alignment and remove it from the list.
     fn find_free_block(&mut self, size: usize, align: usize) -> Option<(&'static mut ListNode, usize)> {
-        todo!("list::find_free_block() is not implemented yet.")
-    }
+        let mut current = &mut self.head;
+
+        // Wir wandern die Liste ab, bis wir einen passenden Block finden
+        while let Some(ref mut region) = current.next {
+            if let Ok(alloc_start) = Self::check_block_for_alloc(&region, size, align) {
+                let next = region.next.take();
+                let ret = Some((current.next.take().unwrap(), alloc_start));
+                current.next = next;
+                return ret;
+            } else {
+                current = current.next.as_mut().unwrap();
+            }
+        }
+        None    }
 
     /// Check if the given block is large enough for an allocation with `size` and `align`.
     fn check_block_for_alloc(block: &ListNode, size: usize, align: usize) -> Result<usize,()> {
-        todo!("list::check_block_for_alloc() is not implemented yet.")
-    }
+        let alloc_start = align_up(block.start_addr(), align);
+        let alloc_end = alloc_start.saturating_add(size);
+
+        if alloc_end > block.end_addr() {
+            return Err(());
+        }
+        let excess_size = block.end_addr() - alloc_end;
+        if excess_size > 0 && excess_size < core::mem::size_of::<ListNode>() {
+            return Err(());
+        }
+
+        Ok(alloc_start)    }
 
     /// Adjust the given layout so that the resulting allocated memory
     /// block is also capable of storing a `ListNode`.
@@ -91,12 +156,31 @@ impl LinkedListAllocator {
 
     /// Dump the free list for debugging purposes.
     pub fn dump_free_list(&mut self) {
-        todo!("list::dump_free_list() is not implemented yet.")
-    }
+
+        crate::println!("Linked list allocator:");
+        crate::println!("  Heap start: {:#x}, Heap end: {:#x}", self.heap_start, self.heap_end);
+        crate::println!("  Free blocks:");
+
+        let mut current = &self.head;
+        while let Some(ref region) = current.next {
+            crate::println!("    Block at {:#x} with size {}", region.start_addr(), region.size);
+            current = region;
+        }    }
 
     /// Allocate memory of the given size and alignment.
     pub unsafe fn alloc(&mut self, layout: Layout) -> *mut u8 {
-        todo!("list::alloc() is not implemented yet.")
+        let (size, align) = LinkedListAllocator::size_align(layout);
+
+        if let Some((block, alloc_start)) = self.find_free_block(size, align) {
+            let alloc_end = alloc_start.saturating_add(size);
+            let excess_size = block.end_addr() - alloc_end;
+            if excess_size > 0 {
+                self.add_free_block(alloc_end, excess_size);
+            }
+            alloc_start as *mut u8
+        } else {
+            core::ptr::null_mut()
+        }
     }
 
     /// Free the memory block at the given pointer with the given layout.

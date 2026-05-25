@@ -5,5 +5,11 @@ members = [
     "kernel",
 ]
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 # [profile.release]
 # debug = true

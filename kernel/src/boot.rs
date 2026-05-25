@@ -26,7 +26,10 @@ use crate::device::terminal;
 use crate::logger::Logger;
 
 #[macro_use]
+extern crate alloc;
+mod allocator;
 mod device;
+mod consts;
 mod library;
 mod logger;
 mod multiboot;
@@ -82,8 +85,16 @@ pub extern "C" fn main(multiboot_magic: u32, multiboot: &multiboot::BootInfo) ->
     // Load the Global Descriptor Table (code in boot.asm)
     unsafe { load_gdt(); }
 
+    crate::allocator::global::init_allocator(
+        crate::consts::heap_start(),
+        crate::consts::HEAP_SIZE
+    );
+
+    //  Heap Demo aufrufen
+    // Jetzt testen wir,ob Box und Vec funktioniren
+
     // TODO: Call your demo code here.
-    COM1.lock().write_str("Hello World"); // Aufruf der andren Methode
+   // COM1.lock().write_str("Hello World"); // Aufruf der andren Methode
     //COM1.lock().write_byte('H' as u8);
 
 
@@ -97,15 +108,17 @@ pub extern "C" fn main(multiboot_magic: u32, multiboot: &multiboot::BootInfo) ->
     //The unwrap() function simply checks if the Result is Ok and panics otherwise.
     //info!("niemals bis hier!");
 
-    for _ in 0..35 {
-       println!("Hello, World!");
-    }
+  //  for _ in 0..35 {
+    //   println!("Hello, World!");
+   // }
 
    // demo::lesson1::text_demo();
 
    // crate::demo::lesson1::keyboard_demo();
 
     // Endless loop, as we cannot return from main().
+    //crate::demo::lesson2::speaker_demo();
+    crate::demo::lesson2::heap_demo();
     loop {}
 }
 
@@ -162,6 +175,7 @@ fn exit_uefi_boot_services(multiboot: &multiboot::BootInfo) -> MemoryMapOwned {
 #[panic_handler]
 /// The panic handler for the kernel.
 /// It logs the panic information and enters an infinite loop, halting the system.
+#[cfg(not(test))]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     error!("Kernel panic: {}", info);
     loop {}

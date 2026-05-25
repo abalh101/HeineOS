@@ -89,24 +89,47 @@ impl Speaker {
 
     /// Play a specific frequency for a given amount of time (milliseconds).
     pub fn play(&mut self, frequency: usize, duration: usize) {
-        todo!("Speaker::play() is not implemented yet.")
-    }
+        let divisor = PIT_FREQUENCY / frequency;
+
+        unsafe {
+            self.pit_ctrl_port.outb(0xB6);
+            self.pit_data2_port.outb((divisor & 0xFF) as u8);
+            self.pit_data2_port.outb((divisor >> 8) as u8);
+        }
+
+        // sprecher an,warten,sprecher aus.
+        self.on();
+        self.delay(duration);
+        self.off();    }
 
     /// Turn on the speaker.
     /// The played tone is dependent on counter 2 of the PIT.
     pub fn on(&mut self) {
-        todo!("Speaker::on() is not implemented yet.")
+        unsafe {
+            let status = self.ppi_port.inb();
+            self.ppi_port.outb(status | 0x03);
+        }
     }
 
     /// Turn off the speaker.
     pub fn off(&mut self) {
-        todo!("Speaker::off() is not implemented yet.")
+
+        unsafe {
+            let status = self.ppi_port.inb();
+            self.ppi_port.outb(status & !0x03);
+        }
     }
 
     /// Return the current value of the PIT counter (16-bit).
     /// Used by `delay()` to check if the counter has reached 0 or has been reloaded.
     fn read_counter(&mut self) -> u16 {
-        todo!("Speaker::read_counter() is not implemented yet.")
+
+        unsafe {
+            self.pit_ctrl_port.outb(0x00);
+            let low = self.pit_data0_port.inb();
+            let high = self.pit_data0_port.inb();
+            ((high as u16) << 8) | (low as u16)
+        }
     }
 
     /// Wait for a given amount of time in milliseconds using counter 0 of the PIT.
@@ -114,7 +137,27 @@ impl Speaker {
     /// This means that the counter will count down from 1193 to 0 and then reload itself.
     /// Counting from 1193 to 0 takes 1ms.
     fn delay(&mut self, duration: usize) {
-        todo!("Speaker::delay() is not implemented yet.")
+
+        unsafe {
+            // Konfiguriere PIT Kanal 0 für das Delay:
+            // 0x34 = Channel 0, Access Loby/Hiby, Mode 2 (Rate Generator), Binary
+            self.pit_ctrl_port.outb(0x34);
+            // Wir schreiben den Reload-Wert 1193 (0x04a9) in Kanal 0. Das entspricht exakt 1ms.
+            self.pit_data0_port.outb(0xa9); // Low Byte
+            self.pit_data0_port.outb(0x04); // High Byte
+        }
+
+        let mut elapsed_ms = 0;
+        let mut last_counter = self.read_counter();
+
+        while elapsed_ms < duration {
+            let current_counter = self.read_counter();
+            if current_counter > last_counter {
+                elapsed_ms += 1;
+            }
+
+            last_counter = current_counter;
+        }
     }
 }
 
