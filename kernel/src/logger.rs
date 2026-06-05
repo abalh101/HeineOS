@@ -6,17 +6,29 @@
  * License: GPLv3
  */
 
+use crate::print;
 use core::fmt::Write;
+use core::sync::atomic::{AtomicBool, Ordering};
 use log::{Metadata, Record};
 use crate::device::serial;
+use crate::println;
 
-/// A simple logger implementing the `log::Log` trait, writing to the serial port (COM1).
-pub struct Logger {}
+//use crate::println; //  Damit wir auf den Bildschirm drucken kann
+//use crate::println;
+/// A simple logger implementing the `log::Log` trait, writing to the serial port (COM1) and optionally the terminal.
+pub struct Logger {
+    log_to_terminal: AtomicBool,
+}
 
 impl Logger {
     /// Create a new logger.
     pub const fn new() -> Logger {
-        Logger {}
+        Logger {
+            log_to_terminal: AtomicBool::new(false),
+        }
+    }
+    pub fn enable_terminal_logging(&self, enabled: bool) {
+        self.log_to_terminal.store(enabled, Ordering::Relaxed);
     }
 }
 
@@ -41,6 +53,10 @@ impl log::Log for Logger {
                 line,
                 record.args()
             );
+
+            if self.log_to_terminal.load(Ordering::Relaxed) {
+                println!("[0.000][{}][{}@{}] {}", level_str, file_name, line, record.args());
+            }
         }
     }
 

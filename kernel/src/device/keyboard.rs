@@ -6,14 +6,15 @@
  * License: GPLv3
  */
 
+use alloc::boxed::Box;
 use bitflags::bitflags;
 use crate::device::cpu::IoPort;
 use crate::device::key::{KeyEvent, KeyModifiers, Scancode, KeyEventQueue};
 use crate::library::spinlock::Spinlock;
-
-// Hinweis: Falls 'Once' oder 'ISR' nicht gefunden werden, stelle sicher, dass die
-// entsprechenden Module in deinem Projekt korrekt importiert sind.
 use crate::library::once::Once;
+use crate::interrupt::isr::ISR;
+use crate::interrupt::dispatcher::{InterruptVector, INT_VECTORS};
+use crate::device::pic::{PIC, Irq};
 
 /// Global key event buffer.
 /// Each key is pushed to this queue by the interrupt handler and can be retrieved at a later time by the user.
@@ -29,25 +30,39 @@ pub fn keyboard_buffer() -> &'static KeyEventQueue {
 /// Interrupt handler struct for the keyboard.
 struct KeyboardISR;
 
-// Dummy-Implementierung für das ISR-Trait (Interrupt Service Routine)
-// Passe den Pfad zum ISR-Trait an, falls nötig (z.B. use crate::device::interrupts::ISR;)
 impl ISR for KeyboardISR {
     /// Keyboard interrupt handler.
-    /// This function reads the next byte from the keyboard and decodes it into a key event.
+   // fn trigger(&self) {
+     //   log::debug!("Keyboard interrupt handler triggered");
+
+        // (In der nächsten Aufgabe werden wir hier die Scancodes auslesen
+        // und in den KEYBOARD_BUFFER pushen!)
+    //}
     fn trigger(&self) {
-        todo!("KeyboardISR::trigger() not implemented yet!");
+        let mut keyboard = KEYBOARD.lock();
+
+        while (unsafe { keyboard.control_port.inb() } & KeyboardStatus::OUTPUT_BUFFER_FULL.bits()) != 0 {
+            if let Some(key_event) = keyboard.try_read_next_byte() {
+                keyboard_buffer().push_key_event(key_event);
+            }
+        }
     }
 }
 
 /// Register the keyboard interrupt handler with the interrupt dispatcher
 /// and enable keyboard interrupts at the PIC.
 pub fn plugin() {
-    todo!("Keyboard::plugin() not implemented yet!");
+    // 1. Tastatur beim Interrupt-Dispatcher (Vector 33) anmelden
+    INT_VECTORS.lock().register(InterruptVector::Keyboard, Box::new(KeyboardISR));
+
+    // 2. PIC erlauben, das Signal durchzulassen
+    PIC.lock().allow(Irq::Keyboard);
+
+    log::info!("Tastatur-Interrupt beim PIC aktiviert und registriert.");
 }
 
-
 /// The global keyboard instance protected by a spinlock.
-pub static KEYBOARD: Spinlock<Keyboard> = Spinlock::new(Keyboard::new());
+static KEYBOARD: Spinlock<Keyboard> = Spinlock::new(Keyboard::new());
 
 /// Driver struct for the PS/2 keyboard.
 pub struct Keyboard {
@@ -137,6 +152,9 @@ impl Keyboard {
         let status = unsafe { self.control_port.inb() };
         if (status & KeyboardStatus::OUTPUT_BUFFER_FULL.bits()) != 0 {
             let data = unsafe { self.data_port.inb() };
+            if (status & KeyboardStatus::AUXILIARY_DEVICE.bits()) != 0 {
+                return None;
+            }
             if self.decode_byte(data) {
                 return Some(self.gather);
             }
@@ -144,7 +162,7 @@ impl Keyboard {
         None
     }
 
-    pub fn poll_key_event(&mut self) -> KeyEvent {
+   /* pub fn poll_key_event(&mut self) -> KeyEvent {
         loop {
             if let Some(event) = self.try_read_next_byte() {
                 return event;
@@ -160,7 +178,7 @@ impl Keyboard {
                 return event;
             }
         }
-    }
+    }*/
 
     pub fn set_repeat_rate(&mut self, delay: u8, speed: u8) {
         todo!("keyboard::set_repeat_rate() not implemented yet");

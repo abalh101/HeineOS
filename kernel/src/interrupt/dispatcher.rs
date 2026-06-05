@@ -64,7 +64,7 @@ pub enum InterruptVector {
 }
 
 /// Global instance of the interrupt vector map.
-static INT_VECTORS: Spinlock<IntVectors> = Spinlock::new(IntVectors::new());
+pub static INT_VECTORS: Spinlock<IntVectors> = Spinlock::new(IntVectors::new());
 
 /// Initialize the interrup vector map.
 /// The heap must be initialized before calling this function.
@@ -81,9 +81,11 @@ pub unsafe fn unlock_int_vectors() {
 /// The main interrupt dispatcher.
 /// Every interrupt is routed here, if not specified otherwise in the IDT.
 pub fn dispatch_interrupt(vector: u8, stack_frame: InterruptStackFrame, error_code: Option<u64>) {
-    todo!("dispatch_interrupt() not implemented yet!");
+    log::debug!("Handling interrupt vector {}", vector);
+    if !INT_VECTORS.lock().report(vector) {
+        panic!("Unhandled interrupt vector: {}! No ISR registered.", vector);
+    }
 }
-
 /// The Interrupt vector map. Each ISR is registered in this map.
 pub struct IntVectors {
     // Each ISR is wrapped in a Box, because the size of the ISRs is not known at compile time.
@@ -116,12 +118,23 @@ impl IntVectors {
 
     /// Register an ISR.
     /// Interrupts get disabled while registering the ISR to avoid race conditions with `dispatch_interrupt()`.
-    pub fn register(vector: InterruptVector, isr: Box<dyn ISR>) {
-        todo!("IntVectors::register() not implemented yet!");
+    pub fn register(&mut self,vector: InterruptVector, isr: Box<dyn ISR>) {
+        let index = vector as usize;
+        cpu::without_interrupts(|| {
+            self.map[index] = Some(isr);
+        });
     }
 
     /// Check if an ISR is registered for `vector`. If so, call it.
     pub fn report(&self, vector: u8) -> bool {
-        todo!("IntVectors::report() not implemented yet!");
+
+        let index = vector as usize;
+
+        if let Some(isr) = &self.map[index] {
+            isr.trigger();
+            return true;
+        }
+
+        false
     }
 }

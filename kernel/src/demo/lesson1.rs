@@ -5,7 +5,7 @@
  *         Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-14
  * License: GPLv3
  */
-use crate::device::keyboard::KEYBOARD;
+//use crate::device::keyboard::KEYBOARD;
 use crate::device::terminal::terminal;
 //use crate::println;
 use crate::{print, println};
@@ -25,11 +25,11 @@ pub fn keyboard_demo() {
     println!("Press keys on your keyboard. Press 'Esc' to exit the demo.");
     println!("");
 
-    loop {
+   /* loop {
         // Blockieren bis ein Event eintritt
         let event = KEYBOARD.lock().poll_key_event();
 
         //  {:?} Formatter gibt die gesamte KeyEvent Struktur automatisch
         println!("{:?}", event);
-    }
+    }*/
 }
