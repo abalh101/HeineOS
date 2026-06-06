@@ -1,0 +1,10 @@
+default = "heineos"
+timeout = 0
+log_level = "info"
+
+[entries]
+  [entries.heineos]
+    name = "HeineOS"
+    image = "kernel.elf"
+    modules = [ { image = "initrd.tar", argv = "initrd.tar" } ]
+    argv = "log_level=DBG log_to_terminal=false"
