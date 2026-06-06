@@ -36,6 +36,8 @@
     mod multiboot;
     mod demo;
     mod interrupt;
+    pub mod coroutine;
+    pub mod thread;
 
     unsafe extern "C" {
         fn load_gdt();
@@ -128,54 +130,17 @@
         unsafe { crate::device::cpu::enable_int(); }
 
         info!("Boot-Sequenz abgeschlossen!");
-        //__interupt-Code
 
-      /*  crate::interrupt::idt::idt().load();
-
-        info!("Initialisiere PIC...");
-        crate::device::pic::PIC.lock().init();
-
-        info!("Initialisiere Tastatur...");
-        crate::device::keyboard::plugin();
-        info!("Aktiviere globale Interrupts auf der CPU...");
-        unsafe { crate::device::cpu::enable_int(); }
-
-        info!("Boot-Sequenz abgeschlossen!");
-
-*/
-        //__interupt-Code
-        //info!("Teste manuellen Interrupt 100...");
-        //unsafe { core::arch::asm!("int 100"); }
-
-        //  Heap Demo aufrufen
-        // Jetzt testen wir,ob Box und Vec funktioniren
-
-        // TODO: Call your demo code here.
-       // COM1.lock().write_str("Hello World"); // Aufruf der andren Methode
-        //COM1.lock().write_byte('H' as u8);
-
-
-       // info!("Locking erstmal");
-        //let _lock1 = COM1.lock();
-       // info!("erfolgreich! noch einmal deadlock ");
-
-        //let _lock2 = COM1.lock(); sonst bootet das system nicht weit genug
-
-        // Diese Zeile sieht man im -Terminal niemals
-        //The unwrap() function simply checks if the Result is Ok and panics otherwise.
-        //info!("niemals bis hier!");
-
-      //  for _ in 0..35 {
+        //  for _ in 0..35 {
         //   println!("Hello, World!");
-       // }
+        // }
 
-       // demo::lesson1::text_demo();
-
-       // crate::demo::lesson1::keyboard_demo();
-
-        // Endless loop, as we cannot return from main().
-        //crate::demo::lesson2::speaker_demo();
-        crate::demo::lesson2::heap_demo();
+        // demo::lesson1::text_demo();
+        // crate::demo::lesson1::keyboard_demo();
+        // crate::demo::lesson2::speaker_demo();
+        // crate::demo::lesson2::heap_demo();
+        // crate::demo::lesson4::coroutine_demo();
+         crate::demo::lesson4::thread_demo();
         loop {}
     }
 

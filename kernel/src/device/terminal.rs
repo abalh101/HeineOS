@@ -8,7 +8,8 @@
 
 use core::fmt;
 use core::fmt::Write;
-use crate::device::{font_8x8, framebuffer};
+//use crate::device::{font_8x8, framebuffer};
+use crate::device::framebuffer;
 use crate::device::framebuffer::Framebuffer;
 use crate::library::once::Once;
 use crate::library::spinlock::Spinlock;
@@ -67,8 +68,8 @@ impl Terminal {
     /// Create a new Terminal instance with the given framebuffer.
     /// The terminal calculates its size based on the framebuffer dimensions and the font size.
     pub fn new(mut framebuffer: Framebuffer) -> Terminal {
-        let cols = framebuffer.width / font_8x8::CHAR_WIDTH;
-        let rows = framebuffer.height / font_8x8::CHAR_HEIGHT;
+        let cols = framebuffer.width / framebuffer::CHAR_WIDTH;
+        let rows = framebuffer.height / framebuffer::CHAR_HEIGHT;
 
         framebuffer.clear();
 
@@ -129,8 +130,8 @@ impl Terminal {
             self.pos.0 = 0;
             self.pos.1 += 1;
         } else {
-            let x = self.pos.0 * font_8x8::CHAR_WIDTH;
-            let y = self.pos.1 * font_8x8::CHAR_HEIGHT;
+            let x = self.pos.0 * framebuffer::CHAR_WIDTH;
+            let y = self.pos.1 * framebuffer::CHAR_HEIGHT;
             fb.draw_char(c, x, y, fg_color, bg_color);
             self.pos.0 += 1;
             if self.pos.0 >= self.cols {
@@ -139,7 +140,7 @@ impl Terminal {
             }
         }
         if self.pos.1 >= self.rows {
-            fb.scroll_up(font_8x8::CHAR_HEIGHT);
+            fb.scroll_up(framebuffer::CHAR_HEIGHT);
             self.pos.1 = self.rows - 1;
         }
         Terminal::draw_cursor(self.pos, &mut fb);
@@ -147,16 +148,16 @@ impl Terminal {
 
     /// Draw the cursor at the given position by drawing a white space character in the default foreground color.
     fn draw_cursor(pos: (usize, usize), framebuffer: &mut Framebuffer) {
-        let x = pos.0 * font_8x8::CHAR_WIDTH;
-        let y = pos.1 * font_8x8::CHAR_HEIGHT;
+        let x = pos.0 * framebuffer::CHAR_WIDTH;
+        let y = pos.1 * framebuffer::CHAR_HEIGHT;
 
         framebuffer.draw_char(' ', x, y, DEFAULT_FG_COLOR, DEFAULT_FG_COLOR);
     }
 
     /// Clear the cursor at the given position by drawing a white space character in the default background color.
     fn clear_cursor(pos: (usize, usize), framebuffer: &mut Framebuffer) {
-        let x = pos.0 * font_8x8::CHAR_WIDTH;
-        let y = pos.1 * font_8x8::CHAR_HEIGHT;
+        let x = pos.0 * framebuffer::CHAR_WIDTH;
+        let y = pos.1 * framebuffer::CHAR_HEIGHT;
 
         framebuffer.draw_char(' ', x, y, DEFAULT_BG_COLOR, DEFAULT_BG_COLOR);
     }

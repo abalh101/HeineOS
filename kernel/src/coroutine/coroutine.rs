@@ -2,7 +2,7 @@
  * Contains functions to create, start, switch and end coroutines.
  *
  * Author: Michael Schoettner, Heinrich Heine University Duesseldorf, 2023-05-15
- *         Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-15
+ * Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-15
  * License: GPLv3
  */
 
@@ -26,27 +26,73 @@ fn next_id() -> usize {
 #[unsafe(naked)]
 unsafe extern "C" fn coroutine_start(stack_ptr: usize) {
     naked_asm!(
-        // TODO: Implement assembly code for starting a coroutine
+        "mov rsp, rdi",
+        "popfq",    // rflags
+        "pop rbp",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rbx",
+        "pop rax",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
         "ret"
     )
 }
 
 /// Low-level routine for switching to the next coroutine.
-/// `current_stack_ptr` is a pointer to `stack_ptr` of the current coroutine (where the rsp is saved).
-/// `next_stack` is the value of `stack_ptr` of the next coroutine (the new rsp value).
+/// `current_stack_ptr` is a pointer to `stack_ptr` of the current coroutine (in rdi).
+/// `next_stack` is the value of `stack_ptr` of the next coroutine (in rsi).
 #[unsafe(naked)]
 unsafe extern "C" fn coroutine_switch(current_stack_ptr: *mut usize, next_stack: usize) {
     naked_asm!(
-        // TODO: Implement assembly code for switching coroutines
+        "push r8",
+        "push r9",
+        "push r10",
+        "push r11",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "push rax",
+        "push rbx",
+        "push rcx",
+        "push rdx",
+        "push rsi",
+        "push rdi",
+        "push rbp",
+        "pushfq", // rflags
+
+        "mov [rdi], rsp",
+        "mov rsp, rsi",
+        "popfq", // rflags
+        "pop rbp",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rbx",
+        "pop rax",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
         "ret"
     )
 }
 
 /// Represents a coroutine in the system.
-/// It contains the stack, the entry function, and a pointer to the next coroutine.
-/// Coroutines must be chained via `set_next()` and form a circular linked list.
-/// To start the coroutine, use `start()`. Once started, coroutines cannot be exited
-/// and the entry function must not return.
 pub struct Coroutine {
     id: usize,
     stack: Vec<u64>,  // Memory for the stack
@@ -75,14 +121,19 @@ impl Coroutine {
 
     /// Start the coroutine.
     /// Once started, coroutines cannot be exited.
-    /// May only be called once.
     pub fn start(&mut self) {
-        todo!("Coroutine::start() is not implemented yet.");
+        unsafe {
+            coroutine_start(self.stack_ptr);
+        }
     }
 
     /// Switch to the next coroutine.
     pub fn switch(&mut self) {
-        todo!("Coroutine::switch() is not implemented yet.");
+        if !self.next.is_null() {
+            unsafe {
+                coroutine_switch(&mut self.stack_ptr, (*self.next).stack_ptr);
+            }
+        }
     }
 
     /// Get the id of the coroutine.
@@ -92,13 +143,11 @@ impl Coroutine {
 
     /// Set the next coroutine.
     pub fn set_next(&mut self, next: &mut Coroutine) {
-        todo!("Coroutine::set_next() is not implemented yet.");
+        self.next = next as *mut Coroutine;
     }
 
     /// Prepare the stack of a newly created coroutine in a way that it can be used
     /// to return to the 'kickoff' function with the coroutine itself as parameter.
-    /// The prepared stack is used in 'coroutine_start' to start the first coroutine.
-    /// Other coroutines are started by 'coroutine_switch' with the prepared stack.
     fn prepare_stack(&mut self) {
         let kickoff = (Coroutine::kickoff as *const ()) as u64;
         let coroutine = ptr::from_mut(self) as u64;
@@ -127,7 +176,6 @@ impl Coroutine {
 
     /// Called indirectly by using the prepared stack in 'coroutine_start' and 'coroutine_switch'.
     fn kickoff(&mut self) {
-        // Interrupts are disabled during coroutine start, so we need to re-enable them here
         cpu::enable_int();
         (self.entry)(self);
 

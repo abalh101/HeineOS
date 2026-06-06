@@ -2,7 +2,7 @@
  * Contains functions to create, start, switch and end threads.
  *
  * Author: Michael Schoettner, Heinrich Heine University Duesseldorf, 2023-05-15
- *         Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-15
+ * Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-15
  * License: GPLv3
  */
 
@@ -15,6 +15,9 @@ use core::sync::atomic::AtomicUsize;
 use crate::consts::STACK_SIZE;
 use crate::device::cpu;
 use crate::thread::scheduler::scheduler;
+unsafe extern "C" {
+    fn unlock_scheduler();
+}
 
 static THREAD_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -26,7 +29,26 @@ pub fn next_id() -> usize {
 #[unsafe(naked)]
 unsafe extern "C" fn thread_start(stack_ptr: usize) {
     naked_asm!(
-        // TODO: Implement assembly code for starting a thread
+        "mov rsp, rdi",
+        "call unlock_scheduler",
+
+        "popfq",    // rflags
+        "pop rbp",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rbx",
+        "pop rax",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
+
         "ret"
     )
 }
@@ -37,7 +59,46 @@ unsafe extern "C" fn thread_start(stack_ptr: usize) {
 #[unsafe(naked)]
 unsafe extern "C" fn thread_switch(current_stack_ptr: *mut usize, next_stack: usize) {
     naked_asm!(
-        // TODO: Implement assembly code for switching threads
+        "push r8",
+        "push r9",
+        "push r10",
+        "push r11",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "push rax",
+        "push rbx",
+        "push rcx",
+        "push rdx",
+        "push rsi",
+        "push rdi",
+        "push rbp",
+        "pushfq", // rflags
+
+        "mov [rdi], rsp",
+
+        "mov rsp, rsi",
+
+        "call unlock_scheduler",
+
+        "popfq", // rflags
+        "pop rbp",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rbx",
+        "pop rax",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
+
         "ret"
     )
 }
@@ -56,36 +117,35 @@ pub struct Thread {
 impl Thread {
     /// Create a new thread with the given entry function.
     pub fn new(entry: fn()) -> Box<Thread> {
-        // Allocate memory for the stack and initialize it to zero
         let mut stack = Vec::<u64>::with_capacity(STACK_SIZE / 8);
         for _ in 0..stack.capacity() {
             stack.push(0);
         }
 
-        // Set the stack pointer to the top of the stack
         let stack_ptr = ptr::from_ref(&stack[stack.capacity() - 1]) as usize;
 
-        // Create a new thread object
         let mut thread = Box::new(
             Thread { id: next_id(), stack, stack_ptr, entry }
         );
 
-        // Prepare the stack for the thread so it can be started via `thread_start()`
         thread.prepare_stack();
         thread
     }
 
     /// Start the thread.
-    /// This function is only once by the scheduler.
-    /// The scheduler does further thread switching via `switch()`.
+    /// This function is only called once by the scheduler.
     pub fn start(&mut self) {
-        todo!("Thread::start() is not implemented yet.");
+        unsafe {
+            thread_start(self.stack_ptr);
+        }
     }
 
     /// Switch from the `current` thread to the `next` thread.
     /// This function is called by the scheduler to switch between threads.
     pub unsafe fn switch(current: *mut Thread, next: *mut Thread) {
-        todo!("Thread::switch() is not implemented yet.");
+        unsafe {
+            thread_switch(&mut (*current).stack_ptr, (*next).stack_ptr);
+        }
     }
 
     /// Get the ID of the thread.

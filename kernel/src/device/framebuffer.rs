@@ -5,8 +5,25 @@
  *         Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-07
  * License: GPLv3
  */
-use crate::device::font_8x8;
+//use crate::device::font_8x8;
 use crate::multiboot;
+use core::fmt;
+
+#[cfg(not(feature = "unifont"))]
+use crate::device::font_8x8;
+
+#[cfg(feature = "unifont")]
+use unifont::Glyph;
+
+#[cfg(feature = "unifont")]
+pub const CHAR_WIDTH: usize = 8;
+#[cfg(not(feature = "unifont"))]
+pub const CHAR_WIDTH: usize = font_8x8::CHAR_WIDTH;
+
+#[cfg(feature = "unifont")]
+pub const CHAR_HEIGHT: usize = 16;
+#[cfg(not(feature = "unifont"))]
+pub const CHAR_HEIGHT: usize = font_8x8::CHAR_HEIGHT;
 
 /// Represents a linear framebuffer for graphics output.
 /// The framebuffer is expected to be in 32-bit RGB format.
@@ -107,6 +124,7 @@ impl Framebuffer {
     }
 
     /// Get the pixel data for a character from the font data.
+    #[cfg(not(feature = "unifont"))]
     fn get_char_pixels(c: char) -> &'static [u8] {
         let char_mem_size = (font_8x8::CHAR_WIDTH + (8 >> 1)) / 8 * font_8x8::CHAR_HEIGHT;
         let start = char_mem_size * c as usize;
@@ -117,32 +135,29 @@ impl Framebuffer {
 
     /// Draw a single character at the specified (x, y) coordinates with the given foreground and background colors.
     /// If the character does not fit fully within the framebuffer, it is not drawn.
+    #[cfg(not(feature = "unifont"))]
     pub fn draw_char(&mut self, c: char, x: usize, y: usize, fg_color: u32, bg_color: u32) {
-        let char_width  = font_8x8::CHAR_WIDTH;
-        let char_height = font_8x8::CHAR_HEIGHT;
-        if x + char_width > self.width || y + char_height > self.height {
+        if x + CHAR_WIDTH > self.width || y + CHAR_HEIGHT > self.height {
             return;
         }
 
-        let width_byte = (char_width + 7) / 8;
+        let width_byte = (CHAR_WIDTH + 7) / 8;
         let char_pixels = Framebuffer::get_char_pixels(c);
         let mut pixel_index = 0;
 
-        for y_offset in 0..char_height {
-            let mut x = x;
-            let y = y + y_offset;
+        for y_offset in 0..CHAR_HEIGHT {
+            let mut current_x = x;
+            let current_y = y + y_offset;
 
             for _ in 0..width_byte {
                 for bit in (0..8).rev() {
                     if ((1 << bit) & char_pixels[pixel_index]) == 0 {
-                        // Safe because we already checked bounds above
-                        unsafe { self.draw_pixel_unchecked(x, y, bg_color); }
+                        unsafe { self.draw_pixel_unchecked(current_x, current_y, bg_color); }
                     } else {
-                        // Safe because we already checked bounds above
-                        unsafe { self.draw_pixel_unchecked(x, y, fg_color); }
+                        unsafe { self.draw_pixel_unchecked(current_x, current_y, fg_color); }
                     }
 
-                    x += 1;
+                    current_x += 1;
                 }
             }
 
@@ -150,13 +165,49 @@ impl Framebuffer {
         }
     }
 
+    /// Draw a single character at the specified (x, y) coordinates with the given foreground and background colors.
+    /// If the character does not fit fully within the framebuffer, it is not drawn.
+    #[cfg(feature = "unifont")]
+    pub fn draw_char(&mut self, c: char, x: usize, y: usize, fg_color: u32, bg_color: u32) {
+        if x + CHAR_WIDTH > self.width || y + CHAR_HEIGHT > self.height {
+            return;
+        }
+
+        if let Some(glyph) = unifont::get_glyph(c) {
+            match glyph {
+                Glyph::Halfwidth(pixels) => {
+                    for y_offset in 0..CHAR_HEIGHT {
+                        for x_offset in 0..CHAR_WIDTH {
+                            let row_byte = pixels[y_offset];
+                            let is_pixel_set = (row_byte & (1 << (7 - x_offset))) != 0;
+                            let color = if is_pixel_set { fg_color } else { bg_color };
+                            unsafe { self.draw_pixel_unchecked(x + x_offset, y + y_offset, color); }
+                        }
+                    }
+                }
+                Glyph::Fullwidth(_) => {
+                    for y_offset in 0..CHAR_HEIGHT {
+                        for x_offset in 0..CHAR_WIDTH {
+                            unsafe { self.draw_pixel_unchecked(x + x_offset, y + y_offset, bg_color); }
+                        }
+                    }
+                }
+            }
+        } else {
+            for y_offset in 0..CHAR_HEIGHT {
+                for x_offset in 0..CHAR_WIDTH {
+                    unsafe { self.draw_pixel_unchecked(x + x_offset, y + y_offset, 0xFF0000); }
+                }
+            }
+        }
+    }
     /// Draw a string at the specified (x, y) coordinates with the given foreground and background colors.
     pub fn draw_str(&mut self, str: &str, x: usize, y: usize, fg_color: u32, bg_color: u32) {
         let mut x = x;
 
         for c in str.chars() {
             self.draw_char(c, x, y, fg_color, bg_color);
-            x += font_8x8::CHAR_WIDTH;
+            x += CHAR_WIDTH +1; // Wir nutzen hier die generische Konstante, nicht font_8x8::
         }
     }
 
