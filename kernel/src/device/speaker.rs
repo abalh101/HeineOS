@@ -11,6 +11,7 @@
 
 use crate::device::cpu::IoPort;
 use crate::library::spinlock::Spinlock;
+use crate::device::pit::wait;
 
 pub static SPEAKER: Spinlock<Speaker> = Spinlock::new(Speaker::new());
 
@@ -99,7 +100,8 @@ impl Speaker {
 
         // sprecher an,warten,sprecher aus.
         self.on();
-        self.delay(duration);
+       // self.delay(duration);
+        wait(duration);
         self.off();    }
 
     /// Turn on the speaker.
@@ -119,10 +121,10 @@ impl Speaker {
             self.ppi_port.outb(status & !0x03);
         }
     }
-
+/* irgendwie veraltet
     /// Return the current value of the PIT counter (16-bit).
     /// Used by `delay()` to check if the counter has reached 0 or has been reloaded.
-    fn read_counter(&mut self) -> u16 {
+   fn read_counter(&mut self) -> u16 {
 
         unsafe {
             self.pit_ctrl_port.outb(0x00);
@@ -158,7 +160,7 @@ impl Speaker {
 
             last_counter = current_counter;
         }
-    }
+    }*/
 }
 
 /// Plays the Tetris theme using the PC speaker.
@@ -188,7 +190,8 @@ pub fn tetris() {
     speaker.play(1056, 500);
     speaker.play(880, 500);
     speaker.play(880, 500);
-    speaker.delay(250);
+    //speaker.delay(250);
+    wait(250);
     speaker.play(1188, 500);
     speaker.play(1408, 250);
     speaker.play(1760, 500);
@@ -207,7 +210,8 @@ pub fn tetris() {
     speaker.play(1056, 500);
     speaker.play(880, 500);
     speaker.play(880, 500);
-    speaker.delay(500);
+    //speaker.delay(500);
+    wait(500);
     speaker.play(1320, 500);
     speaker.play(990, 250);
     speaker.play(1056, 250);
@@ -229,7 +233,8 @@ pub fn tetris() {
     speaker.play(1056, 500);
     speaker.play(880, 500);
     speaker.play(880, 500);
-    speaker.delay(250);
+    //speaker.delay(250);
+    wait(250);
     speaker.play(1188, 500);
     speaker.play(1408, 250);
     speaker.play(1760, 500);
@@ -248,7 +253,8 @@ pub fn tetris() {
     speaker.play(1056, 500);
     speaker.play(880, 500);
     speaker.play(880, 500);
-    speaker.delay(500);
+    //speaker.delay(500);
+    wait(500);
     speaker.play(660, 1000);
     speaker.play(528, 1000);
     speaker.play(594, 1000);

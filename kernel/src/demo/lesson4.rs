@@ -11,6 +11,7 @@ use crate::device::terminal::terminal;
 use crate::print_terminal;
 use crate::thread::scheduler::scheduler;
 use crate::thread::thread::Thread;
+use crate::device::pit::system_time;
 
 /// A demo function showcasing coroutines.
 /// It starts three coroutines, each incrementing a counter and printing it to the terminal in an endless loop.
@@ -64,6 +65,10 @@ pub fn thread_demo() {
         term.set_pos(0, 1);
         print_terminal!(&mut term, "This demo cannot be exited. Please reboot the system to get back to the menu.");
     }
+    let speaker_thread = Thread::new(|| {
+        crate::device::speaker::tetris();
+    });
+    scheduler().ready(speaker_thread);
 
     let t1 = Thread::new(thread_entry);
     let t2 = Thread::new(thread_entry);
@@ -85,24 +90,55 @@ fn thread_entry() {
     let x = 10;
     let y = 10 + tid as usize;
 
+    let start_time = system_time();
+    let target = 1000;
+
+    //Thread erreichen es auch in kurzer zeit etwa ein Dritttel
+    //let target = 15000;
+
+
     loop {
         counter += 1;
         {
             let mut term = terminal().lock();
+           /* if counter % 10 == 0 { in aufgabe 5.4 gelöscht
+                scheduler().yield_cpu();
+            } */
             term.set_pos(x, y);
             print_terminal!(&mut term, "Thread [{}]: {}", tid, counter);
         }
+        crate::device::pit::wait(1);
 
-        for _ in 0..10_000_000 { core::hint::spin_loop(); }
-        if tid == 1 {
-            if counter == 1000 {
-                scheduler().kill(3);
-            } else if counter == 2000 {
-                scheduler().kill(2);
-            } else if counter == 3000 {
-                scheduler().exit();
+        if counter >= target {
+            let end_time = system_time();
+            let duration = end_time - start_time;
+
+            {
+                let mut term = terminal().lock();
+                term.set_pos(x, y);
+                print_terminal!(&mut term, "Thread [{}]: {} (Finished after {} ms)   ", tid, counter, duration);
             }
+
+            scheduler().exit();
+
+    }
+
+       /* for _ in 0..10_000_000 { core::hint::spin_loop(); }
+        if counter >= 5000 {
+            scheduler().exit();
         }
-        scheduler().yield_cpu();
+*/
+        /* Thread killen sich sleber also keine kill mehr
+        if tid == 1 {
+             if counter == 1000 {
+                 scheduler().kill(3);
+             } else if counter == 2000 {
+                 scheduler().kill(2);
+             } else if counter == 3000 {
+                 scheduler().exit();
+             }
+         }
+         scheduler().yield_cpu();
+     }*/
     }
 }

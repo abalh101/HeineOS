@@ -10,6 +10,7 @@
 use alloc::boxed::Box;
 use core::fmt::Display;
 use core::{fmt, ptr};
+use log::info;
 use crate::allocator;
 use crate::library::once::Once;
 use crate::library::queue::LinkedQueue;
@@ -42,8 +43,10 @@ pub unsafe extern "C" fn unlock_scheduler() {
 /// It contains the active thread and the ready queue with all other threads.
 /// The state is contained in its own struct so that it can be locked via a mutex.
 struct SchedulerState {
+    initialized: bool,
     active_thread: Option<Box<Thread>>,
-    ready_queue: LinkedQueue<Box<Thread>>
+    ready_queue: LinkedQueue<Box<Thread>>,
+    terminated_threads: LinkedQueue<Box<Thread>>,
 }
 
 /// Represents the scheduler.
@@ -57,8 +60,10 @@ impl Scheduler {
     /// and an idle thread as the active thread.
     pub fn new() -> Self {
         let state = SchedulerState {
+            initialized: false,
             active_thread: Some(Thread::new(idle_thread)),
             ready_queue: LinkedQueue::new(),
+            terminated_threads: LinkedQueue::new(),
         };
 
         Scheduler { state: Spinlock::new(state) }
@@ -75,6 +80,7 @@ impl Scheduler {
     /// This function must only be called once.
     pub fn schedule(&self) {
         let mut state = self.state.lock();
+        state.initialized = true;
 
         // The active thread is never None, since we must at least have the idle thread.
         state.active_thread.as_mut().unwrap().start();
@@ -86,7 +92,7 @@ impl Scheduler {
 
         state.ready_queue.enqueue(thread);
     }
-
+/*
     /// Terminate the current (calling) thread and switch to the next one.
     pub fn exit(&self) {
         let mut state = self.state.lock();
@@ -95,6 +101,7 @@ impl Scheduler {
         let mut current = state.active_thread.take().unwrap();
         // The idle thread never exits, so there must be at least one thread in the queue.
         let next = state.ready_queue.dequeue().unwrap();
+        state.terminated_threads.enqueue(current);
 
         // Set the dequeued thread as the active thread,
         // overwriting the current one, which we want to exit.
@@ -104,10 +111,38 @@ impl Scheduler {
             // Switch to the next thread.
             // `current` still contains the old thread we want to exit,
             // while `state.active_thread` contains the next one.
-            Thread::switch(current.as_mut(), state.active_thread.as_mut().unwrap().as_mut());
+            let old_thread = state.terminated_threads.peek_last().unwrap();
+            let new_thread = state.active_thread.as_mut().unwrap();
+            Thread::switch(old_thread.as_mut(), new_thread.as_mut());
+            //Thread::switch(current.as_mut(), state.active_thread.as_mut().unwrap().as_mut());
         }
     }
 
+*/
+
+    /// hoffentlich funktioniert so Änderung in Blatt 5
+    pub fn exit(&self) {
+        let mut state = self.state.lock();
+        let mut current = state.active_thread.take().unwrap();
+        let mut next = state.ready_queue.dequeue().unwrap();
+        let old_ptr = current.as_mut() as *mut Thread;
+        let new_ptr = next.as_mut() as *mut Thread;
+        state.terminated_threads.enqueue(current);
+        state.active_thread = Some(next);
+        unsafe {
+            Thread::switch(old_ptr, new_ptr);
+        }
+    }
+
+    //5.5
+    pub fn cleanup_terminated_threads(&self) {
+
+        let mut state = self.state.lock();
+        while let Some(_thread) = state.terminated_threads.dequeue() {
+            info!("Thread resource cleaned up");
+        }
+    }
+/* in Aufgabe 5.3 ersetzt
     /// Yield the CPU and switch to the next thread in the ready queue.
     pub fn yield_cpu(&self) {
         let mut state = self.state.lock();
@@ -117,6 +152,35 @@ impl Scheduler {
             let new_ptr = new_thread.as_mut() as *mut Thread;
             state.ready_queue.enqueue(old_thread);
             state.active_thread = Some(new_thread);
+            unsafe {
+                Thread::switch(old_ptr, new_ptr);
+            }
+        }
+    }*/
+
+    pub fn yield_cpu(&self) {
+        if crate::allocator::global::is_allocator_locked() {
+            return;
+        }
+
+        let mut state = match self.state.try_lock() {
+            Some(s) => s,
+            None => return,
+        };
+
+        if !state.initialized {
+            return;
+        }
+
+        if let Some(mut new_thread) = state.ready_queue.dequeue() {
+            let mut old_thread = state.active_thread.take().unwrap();
+
+            let old_ptr = old_thread.as_mut() as *mut Thread;
+            let new_ptr = new_thread.as_mut() as *mut Thread;
+
+            state.ready_queue.enqueue(old_thread);
+            state.active_thread = Some(new_thread);
+
             unsafe {
                 Thread::switch(old_ptr, new_ptr);
             }

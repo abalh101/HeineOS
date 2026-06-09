@@ -59,7 +59,14 @@ static SPINNER_CHARS: &[char] = &['|', '/', '-', '\\'];
 
 /// Register the timer interrupt handler.
 pub fn plugin() {
-    todo!("pit::plugin() is not yet implemented");
+    TIMER.init(|| {
+        let mut timer = Timer::new();
+        timer.set_interrupt_interval(TIMER_INTERRUPT_INTERVAL_MS);
+        timer
+    });
+    let isr = Box::new(TimerISR { interval_ms: TIMER_INTERRUPT_INTERVAL_MS });
+    crate::interrupt::dispatcher::INT_VECTORS.lock().register(InterruptVector::Pit, isr);
+    PIC.lock().allow(Irq::Timer);
 }
 
 /// Represents the programmable interval timer.
@@ -75,9 +82,26 @@ struct TimerISR {
 
 impl ISR for TimerISR {
     /// Handle the timer interrupt.
-    /// This function updates the system time and triggers a context switch every 10 ms.
     fn trigger(&self) {
-        todo!("pit::trigger() is not yet implemented");
+        let old_time = SYSTEM_TIME.fetch_add(self.interval_ms, core::sync::atomic::Ordering::Relaxed);
+        let new_time = old_time + self.interval_ms;
+        if new_time % 250 == 0 {
+            let spin_index = (new_time / 250) % 4;
+            let current_char = SPINNER_CHARS[spin_index];
+
+            if let Some(mut term) = crate::device::terminal::terminal().try_lock() {
+                let old_pos = term.pos();
+                term.set_pos(999, 0);
+                term.put_char_colored(current_char, framebuffer::WHITE, framebuffer::BLACK);
+                term.set_pos(old_pos.0, old_pos.1);
+            }
+        }
+        if new_time % 10 == 0 {
+            unsafe {
+                crate::interrupt::dispatcher::unlock_int_vectors();
+            }
+            scheduler().yield_cpu();
+        }
     }
 }
 
@@ -92,6 +116,13 @@ impl Timer {
 
     /// Set the timer interrupt interval in milliseconds.
     pub fn set_interrupt_interval(&mut self, interval_ms: usize) {
-        todo!("pit::set_interrupt_interval() is not yet implemented");
+        let divisor = (TIMER_FREQUENCY * interval_ms) / 1000;
+        let divisor_u16 = divisor as u16;
+
+        unsafe {
+            self.control_port.outb(0x36);
+            self.data_port0.outb((divisor_u16 & 0xFF) as u8);
+            self.data_port0.outb((divisor_u16 >> 8) as u8);
+        }
     }
 }

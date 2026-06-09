@@ -7,6 +7,7 @@
  *         Fabian Ruhland, Heinrich Heine University Dusseldorf, 2026-01-15
  * License: GPLv3
  */
+use crate::device::cpu;
 use crate::device::terminal::terminal;
 use crate::print_terminal;
 use crate::thread::scheduler::scheduler;
@@ -19,6 +20,8 @@ pub fn idle_thread() {
     }*/
     let mut counter = 0;
     loop {
+        unsafe { cpu::enable_int(); }
+        scheduler().cleanup_terminated_threads();
         counter += 1;
         {
             let mut term = terminal().lock();

@@ -60,7 +60,8 @@ impl<T> Spinlock<T> {
             if let Some(guard) = self.try_lock() {
                 return guard;
             }
-            core::hint::spin_loop();
+            //core::hint::spin_loop();
+            crate::thread::scheduler::scheduler().yield_cpu();
         }
     }
 

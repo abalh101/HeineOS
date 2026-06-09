@@ -126,6 +126,10 @@
         crate::device::pic::PIC.lock().init();
         info!("Initialisiere Tastatur...");
         crate::device::keyboard::plugin();
+
+        info!("Initialisiere PIT (System Timer)...");
+        crate::device::pit::plugin();
+
         info!("Aktiviere globale Interrupts auf der CPU...");
         unsafe { crate::device::cpu::enable_int(); }
 
@@ -140,7 +144,7 @@
         // crate::demo::lesson2::speaker_demo();
         // crate::demo::lesson2::heap_demo();
         // crate::demo::lesson4::coroutine_demo();
-         crate::demo::lesson4::thread_demo();
+        crate::demo::lesson4::thread_demo();
         loop {}
     }
 
