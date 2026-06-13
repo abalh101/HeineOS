@@ -38,6 +38,7 @@
     mod interrupt;
     pub mod coroutine;
     pub mod thread;
+    pub mod filesystem;
 
     unsafe extern "C" {
         fn load_gdt();

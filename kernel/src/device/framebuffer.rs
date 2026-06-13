@@ -5,8 +5,9 @@
  *         Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-07
  * License: GPLv3
  */
+use core::cmp::max;
 //use crate::device::font_8x8;
-use crate::multiboot;
+use crate::multiboot;use crate::library::bitmap::Bitmap;
 use core::fmt;
 
 #[cfg(not(feature = "unifont"))]
