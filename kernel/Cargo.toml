@@ -1,7 +1,20 @@
-#
-# CAUTION: This is not meant as a replacement for your existing Cargo.toml
-#          It just contains additional code that you should copy into your own file.
-#
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/boot.rs"
 
 [dependencies]
+bitflags = "2.11.0"
+log = "0.4.29"
+uefi = "0.36.1"
+uefi-raw = "0.13.0"
+nolock = { version = "0.4.1", default-features = false, features = ["queues"] }
+unifont = { version = "1.1.0", optional = true }
+
+[features]
+unifont = ["dep:unifont"]
 tar-no-std = "0.4.2"
