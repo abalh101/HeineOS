@@ -1,0 +1,271 @@
+/*
+ * Driver for a linear framebuffer in 32-bit RGB format.
+ *
+ * Author: Michael Schoetter, Heinrich Heine University Duesseldorf, 2023-06-26
+ *         Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-01-07
+ * License: GPLv3
+ */
+use core::cmp::max;
+//use crate::device::font_8x8;
+use crate::multiboot;use crate::library::bitmap::Bitmap;
+use core::fmt;
+
+#[cfg(not(feature = "unifont"))]
+use crate::device::font_8x8;
+
+#[cfg(feature = "unifont")]
+use unifont::Glyph;
+
+#[cfg(feature = "unifont")]
+pub const CHAR_WIDTH: usize = 8;
+#[cfg(not(feature = "unifont"))]
+pub const CHAR_WIDTH: usize = font_8x8::CHAR_WIDTH;
+
+#[cfg(feature = "unifont")]
+pub const CHAR_HEIGHT: usize = 16;
+#[cfg(not(feature = "unifont"))]
+pub const CHAR_HEIGHT: usize = font_8x8::CHAR_HEIGHT;
+
+/// Represents a linear framebuffer for graphics output.
+/// The framebuffer is expected to be in 32-bit RGB format.
+pub struct Framebuffer {
+    /// The width of the framebuffer in pixels.
+    pub width: usize,
+    /// The height of the framebuffer in pixels.
+    pub height: usize,
+    /// The number of bytes per row of pixels.
+    /// This may be greater than (width * 4) due to padding.
+    pitch: usize,
+    /// A pointer to the start of the framebuffer memory.
+    address: u64,
+}
+
+/// Create a 32-bit color value from red, green, and blue components.
+/// Each component is an 8-bit value (0-255).
+/// The resulting color is in the format 0x00RRGGBB.
+pub const fn color(red: u8, green: u8, blue: u8) -> u32 {
+    ((red as u32) << 16) | ((green as u32) << 8) | (blue as u32)
+}
+
+// ANSI colors
+pub const BLACK: u32 = color(0, 0, 0);
+pub const RED: u32 = color(170, 0, 0);
+pub const GREEN: u32 = color(0, 170, 0);
+pub const YELLOW: u32 = color(170, 170, 0);
+pub const BROWN: u32 = color(170, 85, 0);
+pub const BLUE: u32 = color(0, 0, 170);
+pub const MAGENTA: u32 = color(170, 0, 170);
+pub const CYAN: u32 = color(0, 170, 170);
+pub const WHITE: u32 = color(170, 170, 170);
+
+impl Framebuffer {
+    /// Create a new Framebuffer instance.
+    /// This function is unsafe because the caller must ensure that the provided
+    /// buffer pointer is valid and points to a memory region large enough to hold
+    /// the framebuffer data.
+    pub const unsafe fn new(width: usize, height: usize, pitch: usize, address: u64) -> Framebuffer {
+        Framebuffer { width, height, pitch, address }
+    }
+
+    /// Create a Framebuffer from multiboot framebuffer information.
+    /// Returns None if the framebuffer type is not supported or if the bits per pixel is not 32.
+    /// This function is safe, because it assumes the multiboot information is valid.
+    pub const fn from_multiboot(info: &multiboot::FramebufferInfo) -> Option<Framebuffer> {
+        match info.typ {
+            multiboot::FramebufferType::RGB => {
+                if info.bpp != 32 {
+                    None
+                } else {
+                    Some(Framebuffer {
+                        width: info.width as usize,
+                        height: info.height as usize,
+                        pitch: info.pitch as usize,
+                        address: info.address,
+                    })
+                }
+            },
+            _ => None,
+        }
+    }
+
+    /// Get the width of the framebuffer in pixels.
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    /// Get the height of the framebuffer in pixels.
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    /// Clear the framebuffer by filling it with black pixels.
+    pub fn clear(&mut self) {
+        let buffer = self.address as *mut u8;
+        unsafe { buffer.write_bytes(0, self.pitch * self.height); }
+    }
+
+    /// Draw a pixel at the specified (x, y) coordinates with the given color.
+    /// This method checks the bounds of the framebuffer before drawing
+    /// and omits drawing if the coordinates are out of bounds.
+    pub fn draw_pixel(&mut self, x: usize, y: usize, color: u32) {
+        if x < self.width && y < self.height {
+            unsafe { self.draw_pixel_unchecked(x, y, color); }
+        }
+    }
+
+    /// Draw a pixel at the specified (x, y) coordinates with the given color.
+    /// This method does not check the bounds of the framebuffer.
+    /// This is faster than `draw_pixel` but the caller must ensure that the coordinates are valid.
+    /// Drawing outside the framebuffer may lead to undefined behavior.
+    pub unsafe fn draw_pixel_unchecked(&mut self, x: usize, y: usize, color: u32) {
+        let offset = y * self.pitch + x * 4;
+
+        let buffer = self.address as *mut u8;
+        unsafe { buffer.add(offset).cast::<u32>().write_volatile(color); }
+    }
+
+    /// Get the pixel data for a character from the font data.
+    #[cfg(not(feature = "unifont"))]
+    fn get_char_pixels(c: char) -> &'static [u8] {
+        let char_mem_size = (font_8x8::CHAR_WIDTH + (8 >> 1)) / 8 * font_8x8::CHAR_HEIGHT;
+        let start = char_mem_size * c as usize;
+        let end = start + char_mem_size;
+
+        &font_8x8::DATA[start..end]
+    }
+
+    /// Draw a single character at the specified (x, y) coordinates with the given foreground and background colors.
+    /// If the character does not fit fully within the framebuffer, it is not drawn.
+    #[cfg(not(feature = "unifont"))]
+    pub fn draw_char(&mut self, c: char, x: usize, y: usize, fg_color: u32, bg_color: u32) {
+        if x + CHAR_WIDTH > self.width || y + CHAR_HEIGHT > self.height {
+            return;
+        }
+
+        let width_byte = (CHAR_WIDTH + 7) / 8;
+        let char_pixels = Framebuffer::get_char_pixels(c);
+        let mut pixel_index = 0;
+
+        for y_offset in 0..CHAR_HEIGHT {
+            let mut current_x = x;
+            let current_y = y + y_offset;
+
+            for _ in 0..width_byte {
+                for bit in (0..8).rev() {
+                    if ((1 << bit) & char_pixels[pixel_index]) == 0 {
+                        unsafe { self.draw_pixel_unchecked(current_x, current_y, bg_color); }
+                    } else {
+                        unsafe { self.draw_pixel_unchecked(current_x, current_y, fg_color); }
+                    }
+
+                    current_x += 1;
+                }
+            }
+
+            pixel_index += 1;
+        }
+    }
+
+    /// Draw a single character at the specified (x, y) coordinates with the given foreground and background colors.
+    /// If the character does not fit fully within the framebuffer, it is not drawn.
+    #[cfg(feature = "unifont")]
+    pub fn draw_char(&mut self, c: char, x: usize, y: usize, fg_color: u32, bg_color: u32) {
+        if x + CHAR_WIDTH > self.width || y + CHAR_HEIGHT > self.height {
+            return;
+        }
+
+        if let Some(glyph) = unifont::get_glyph(c) {
+            match glyph {
+                Glyph::Halfwidth(pixels) => {
+                    for y_offset in 0..CHAR_HEIGHT {
+                        for x_offset in 0..CHAR_WIDTH {
+                            let row_byte = pixels[y_offset];
+                            let is_pixel_set = (row_byte & (1 << (7 - x_offset))) != 0;
+                            let color = if is_pixel_set { fg_color } else { bg_color };
+                            unsafe { self.draw_pixel_unchecked(x + x_offset, y + y_offset, color); }
+                        }
+                    }
+                }
+                Glyph::Fullwidth(_) => {
+                    for y_offset in 0..CHAR_HEIGHT {
+                        for x_offset in 0..CHAR_WIDTH {
+                            unsafe { self.draw_pixel_unchecked(x + x_offset, y + y_offset, bg_color); }
+                        }
+                    }
+                }
+            }
+        } else {
+            for y_offset in 0..CHAR_HEIGHT {
+                for x_offset in 0..CHAR_WIDTH {
+                    unsafe { self.draw_pixel_unchecked(x + x_offset, y + y_offset, 0xFF0000); }
+                }
+            }
+        }
+    }
+    /// Draw a string at the specified (x, y) coordinates with the given foreground and background colors.
+    pub fn draw_str(&mut self, str: &str, x: usize, y: usize, fg_color: u32, bg_color: u32) {
+        let mut x = x;
+
+        for c in str.chars() {
+            self.draw_char(c, x, y, fg_color, bg_color);
+            x += CHAR_WIDTH +1; // Wir nutzen hier die generische Konstante, nicht font_8x8::
+        }
+    }
+
+    /// Scroll the framebuffer content up by the specified number of lines.
+    /// The freed space at the bottom is cleared to black.
+    pub fn scroll_up(&mut self, lines: usize) {
+        let bytes_per_row = self.pitch;
+        //Bytes verschoben Anzahl Pixelzeilen * Bytes pro Zeile
+        let offset_bytes = lines * bytes_per_row;
+        let total_bytes = self.height * bytes_per_row;
+        if offset_bytes >= total_bytes {
+            self.clear();
+            return;
+        }
+        let copy_bytes = total_bytes - offset_bytes;
+        let buffer = self.address as *mut u8;
+
+        unsafe {
+            core::ptr::copy(buffer.add(offset_bytes), buffer, copy_bytes);
+            buffer.add(copy_bytes).write_bytes(0, offset_bytes);
+        }
+    }
+
+    /// Draw a bitmap image at the specified (x, y) coordinates.
+    /// If the bitmap does not fully fit within the framebuffer, it is clipped.
+    pub fn draw_bitmap(&mut self, bitmap: &Bitmap, x: usize, y: usize) {
+        // Original bitmap dimensions
+        let bmp_width = bitmap.width() as usize;
+        let bmp_height = bitmap.height() as usize;
+
+        // Clip the bitmap to the framebuffer dimensions
+        let target_width = if x + bmp_width > self.width {
+            max(self.width - x, 0)
+        } else {
+            bmp_width
+        };
+
+        let target_height = if y + bmp_height > self.height {
+            max(self.height - y, 0)
+        } else {
+            bmp_height
+        };
+
+        let pixel_data = bitmap.pixel_data();
+
+        for row in 0..target_height {
+            let src_start = row * bmp_width;
+            let src_end = src_start + target_width;
+            let src_row = &pixel_data[src_start..src_end];
+
+            let fb_offset = (y + row) * self.pitch + x * 4;
+            let buffer = self.address as *mut u8;
+
+            unsafe {
+                let dst_ptr = buffer.add(fb_offset).cast::<u32>();
+                core::ptr::copy_nonoverlapping(src_row.as_ptr(), dst_ptr, target_width);
+            }
+        }
+    }
+}
