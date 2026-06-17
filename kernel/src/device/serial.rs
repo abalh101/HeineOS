@@ -12,6 +12,8 @@ use crate::device::cpu::IoPort;
 
 /// Standard COM port for kernel output via the logger
 pub static COM1: Spinlock<ComPort> = Spinlock::new(ComPort::new(ComBaseAddress::Com1));
+//Zusatzaufgabe 6
+pub static COM3: Spinlock<ComPort> = Spinlock::new(ComPort::new(ComBaseAddress::Com3));
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, PartialEq)]

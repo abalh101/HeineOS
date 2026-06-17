@@ -98,10 +98,50 @@ impl Bitmap {
         // Get a reference to the BMP file header inside the given byte slice
         let header_slice = &data[..size_of::<BitmapFileHeader>()];
         let header = unsafe {
-            &*(header_slice.as_ptr() as *const BitmapFileHeader)
+            core::ptr::read_unaligned(data.as_ptr() as *const BitmapFileHeader)
         };
+        let info = header.info_header;
 
-        todo!("Bitmap::from_bytes() is not yet implemented");
+        if header.signature != [0x42, 0x4D] {
+            return None;
+        }
+
+        if header.info_header.bits_per_pixel != 24 {
+            return None;
+        }
+
+       /* if header.info_header.compression != Compression::None && header.info_header.compression != Compression::BitFields {
+            return None;
+        }*/
+
+        let width = header.info_header.width as usize;
+        let height = header.info_header.height as usize;
+        let data_offset = header.data_offset as usize;
+
+        let row_size = ((width * 3) + 3) & !3;
+
+        if data.len() < data_offset + (row_size * height) {
+            return None;
+        }
+
+        let mut pixel_data = Vec::with_capacity(width * height);
+        let pixel_bytes = &data[data_offset..];
+
+        for y in (0..height).rev() {
+            let row_start = y * row_size;
+            for x in 0..width {
+                let pixel_start = row_start + (x * 3);
+                let b = pixel_bytes[pixel_start];
+                let g = pixel_bytes[pixel_start + 1];
+                let r = pixel_bytes[pixel_start + 2];
+                pixel_data.push(color(r, g, b, 255));
+            }
+        }
+
+        Some(Bitmap {
+            header,
+            pixel_data,
+        })
     }
 
     /// Get the width of the bitmap in pixels.

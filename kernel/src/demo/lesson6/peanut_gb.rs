@@ -10,6 +10,9 @@ use alloc::vec::Vec;
 use core::ffi::{c_char, c_int, c_size_t, c_void, CStr};
 use log::error;
 use crate::library::once::Once;
+use crate::filesystem::tarfs;
+use alloc::vec;
+use crate::library::spinlock::Spinlock;
 
 unsafe extern "C" {
     /// Get the size of the `gb_s` structure (implemented in `peanut-gb.c`).
@@ -60,6 +63,7 @@ unsafe extern "C" {
 
 /// Bitmask for the joypad buttons. See `gb_get_joypad_ptr` for more details.
 #[repr(u8)]
+#[allow(dead_code)]
 enum JoypadButton {
     A = 0x01,
     B = 0x02,
@@ -140,11 +144,16 @@ static PALETTE: &[u32] = &[
 
 /// The ROM file to be played by the emulator.
 static ROM: Once<Vec<u8>> = Once::new();
+static CART_RAM: Spinlock<Vec<u8>> = Spinlock::new(Vec::new());
 
 /// Read a byte from the ROM file at the offset specified by `addr`.
 /// This is a callback function for the PeanutGB emulator.
 unsafe extern "C" fn gb_rom_read(_gb: *mut c_void, addr: u32) -> u8 {
-    // TODO: Read a byte from the ROM file.
+    if let Some(rom_data) = ROM.get() {
+        if (addr as usize) < rom_data.len() {
+            return rom_data[addr as usize];
+        }
+    }
     0
 }
 
@@ -153,8 +162,12 @@ unsafe extern "C" fn gb_rom_read(_gb: *mut c_void, addr: u32) -> u8 {
 ///
 /// This is mostly needed for save game support and part of an optional assignment.
 unsafe extern "C" fn gb_cart_ram_read(_gb: *mut c_void, addr: u32) -> u8 {
-    // TODO: Read a byte from the save RAM (optional assignment)
-    0
+    let ram = CART_RAM.lock();
+    if (addr as usize) < ram.len() {
+        ram[addr as usize]
+    } else {
+        0xFF
+    }
 }
 
 /// Write a byte to the save RAM at the offset specified by `addr`.
@@ -162,19 +175,30 @@ unsafe extern "C" fn gb_cart_ram_read(_gb: *mut c_void, addr: u32) -> u8 {
 ///
 /// This is mostly needed for save game support and part of an optional assignment.
 unsafe extern "C" fn gb_cart_ram_write(_gb: *mut c_void, addr: u32, val: u8) {
-    // TODO: Write a byte to the save RAM (optional assignment)
+    let mut ram = CART_RAM.lock();
+    if (addr as usize) < ram.len() {
+        ram[addr as usize] = val;
+    }
 }
-
 /// Draw a line of pixels from the Game Boy screen to the framebuffer.
 /// The buffer pointed to by `pixels` contains the pixel data for the line.
 /// Each pixel is represented by a single byte, whose first two bits represent the color index.
 /// The other bits are used for Game Boy Color emulation, but are ignored in this implementation.
 unsafe extern "C" fn lcd_draw_line(_gb: *mut c_void, pixels: *const u8, line: u8) {
-    // TODO: Render the line to the framebuffer
+    let line_pixels = unsafe { core::slice::from_raw_parts(pixels, GB_SCREEN_RES.0) };
+    let terminal_guard = crate::device::terminal::terminal().lock();
+    let mut fb_guard = terminal_guard.framebuffer().lock();
+    let offset_x: usize = 300;
+    let offset_y: usize = 200;
+
+    for x in 0..GB_SCREEN_RES.0 {
+        let color_index = (line_pixels[x] & 0b0000_0011) as usize;
+        let color = PALETTE[color_index];
+        fb_guard.draw_pixel(offset_x + x, offset_y + (line as usize), color);
+    }
 }
 
 /// Handle emulation errors.
-/// This is a callback function for the PeanutGB emulator.
 unsafe extern "C" fn gb_error(_gb: *mut c_void, error: c_int, addr: u16) {
     let error = GbError::try_from(error).unwrap_or(GbError::UnknownError);
     error!("PeanutGB error [{:?}] at address [0x{:0>4x}]!", error, addr);
@@ -182,5 +206,127 @@ unsafe extern "C" fn gb_error(_gb: *mut c_void, error: c_int, addr: u16) {
 
 /// Play the given ROM file using the Peanut-GB emulator.
 pub fn play(rom_path: &str) {
-    todo!("peanut-gb demo is not yet implemented");
+    let fs = tarfs::filesystem();
+    let handle = match fs.open(rom_path) {
+        Ok(h) => h,
+        Err(e) => {
+            error!("Failed to open ROM '{}': {:?}", rom_path, e);
+            return;
+        }
+    };
+
+    let rom_size = fs.size(handle).unwrap_or(0);
+    let mut rom_data = vec![0u8; rom_size];
+
+    if let Err(e) = fs.read(handle, &mut rom_data) {
+        error!("Failed to read ROM '{}': {:?}", rom_path, e);
+        return;
+    }
+    ROM.init(|| rom_data);
+    log::info!("ROM '{}' loaded ({} bytes)", rom_path, rom_size);
+    let struct_size = unsafe { gb_size() } as usize;
+    let mut gb_memory = vec![0u8; struct_size];
+    let gb_ptr = gb_memory.as_mut_ptr() as *mut c_void;
+    let init_status = unsafe {
+        gb_init(
+            gb_ptr,
+            gb_rom_read,
+            gb_cart_ram_read,
+            gb_cart_ram_write,
+            gb_error,
+            core::ptr::null(),
+        )
+    };
+
+    let error_code = GbInitError::try_from(init_status).unwrap_or(GbInitError::UnknownError);
+    let mut ram_size: c_size_t = 0;
+    unsafe { gb_get_save_size_s(gb_ptr, &mut ram_size) };
+
+    log::info!("Cartridge RAM size: {} bytes", ram_size);
+
+    if ram_size > 0 {
+        let mut save_data = vec![0u8; ram_size];
+        if let Ok(handle) = fs.open("roms/gameboy.sav") {
+            let file_size = fs.size(handle).unwrap_or(0);
+            if file_size > 0 {
+                let read_size = core::cmp::min(file_size, ram_size);
+                let _ = fs.read(handle, &mut save_data[0..read_size]);
+                log::info!("Savegame loaded! ({} bytes)", read_size);
+            }
+        } else {
+            log::info!("No savegame found. Initializing empty SRAM.");
+        }
+        *CART_RAM.lock() = save_data;
+    }
+    if error_code != GbInitError::NoError {
+        panic!("Failed to initialize PeanutGB (Error: {:?})", error_code);
+    }
+    let mut title_buf = [0i8; 16];
+    unsafe { gb_get_rom_name(gb_ptr, title_buf.as_mut_ptr()) };
+    let cstr = unsafe { CStr::from_ptr(title_buf.as_ptr()) };
+    log::info!("Playing '{}'", cstr.to_str().unwrap_or("Unknown"));
+    let joypad_ptr = unsafe { gb_get_joypad_ptr(gb_ptr) };
+    unsafe {
+        gb_init_lcd(gb_ptr, lcd_draw_line as *const c_void);
+    }
+    log::info!("Starting Emulator Loop...");
+    let mut current_joypad_state: u8 = 0xFF;
+    'emulator: loop {
+        let start_time = crate::device::pit::system_time();
+        unsafe {
+            gb_run_frame(gb_ptr);
+        }
+        let key_buffer = crate::device::keyboard::keyboard_buffer();
+        while let Some(event) = key_buffer.pop_key_event() {
+            let is_pressed = event.pressed();
+
+            if let Some(scancode) = event.scancode() {
+                let button_mask = match scancode {
+                    crate::device::key::Scancode::W => JoypadButton::Up as u8,
+                    crate::device::key::Scancode::A => JoypadButton::Left as u8,
+                    crate::device::key::Scancode::S => JoypadButton::Down as u8,
+                    crate::device::key::Scancode::D => JoypadButton::Right as u8,
+                    crate::device::key::Scancode::J => JoypadButton::A as u8,
+                    crate::device::key::Scancode::K => JoypadButton::B as u8,
+                    crate::device::key::Scancode::Space => JoypadButton::Start as u8,
+                    crate::device::key::Scancode::Enter => JoypadButton::Select as u8,
+                    crate::device::key::Scancode::Escape => {
+                        log::info!("ESC pressed. Exiting emulator.");
+                        break 'emulator; 
+                    },
+                    _ => 0,
+                };
+
+                if button_mask != 0 {
+                    if is_pressed {
+                        current_joypad_state &= !button_mask;
+                    } else {
+                        current_joypad_state |= button_mask;
+                    }
+                }
+            }
+        }
+
+        unsafe { *joypad_ptr = current_joypad_state; }
+        let end_time = crate::device::pit::system_time();
+        let frame_duration = (end_time - start_time) as usize;
+
+        if frame_duration < MS_PER_FRAME {
+            crate::device::pit::wait(MS_PER_FRAME - frame_duration);
+        }
+    }
+
+    log::info!("Emulator stopped.");
+    let ram = CART_RAM.lock();
+    if !ram.is_empty() {
+        log::info!("Exporting {} bytes of save data to COM3 (gameboy.sav)...", ram.len());
+
+        let mut com3 = crate::device::serial::COM3.lock();
+        com3.init();
+
+        for byte in ram.iter() {
+            com3.write_byte(*byte);
+        }
+        log::info!("Export finished!");
+    }
 }

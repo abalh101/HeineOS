@@ -252,6 +252,20 @@ impl Framebuffer {
             bmp_height
         };
 
-        todo!("framebuffer::draw_bitmap() is not yet implemented");
+        let pixel_data = bitmap.pixel_data();
+
+        for row in 0..target_height {
+            let src_start = row * bmp_width;
+            let src_end = src_start + target_width;
+            let src_row = &pixel_data[src_start..src_end];
+
+            let fb_offset = (y + row) * self.pitch + x * 4;
+            let buffer = self.address as *mut u8;
+
+            unsafe {
+                let dst_ptr = buffer.add(fb_offset).cast::<u32>();
+                core::ptr::copy_nonoverlapping(src_row.as_ptr(), dst_ptr, target_width);
+            }
+        }
     }
 }

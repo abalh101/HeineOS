@@ -8,6 +8,7 @@
     #![no_std]
     #![feature(abi_x86_interrupt)]
     #![feature(unsafe_cell_access)]
+    #![feature(c_size_t)]
 
     // Silence compiler warnings.
     // This is done to avoid overwhelming compiler output when building the OS at the beginning.
@@ -73,14 +74,33 @@
             .find_tag::<multiboot::FramebufferInfo>(multiboot::TagType::FramebufferInfo)
             .expect("Missing framebuffer info");
 
-        let framebuffer = Framebuffer::from_multiboot(framebuffer_info)
+        let mut framebuffer = Framebuffer::from_multiboot(framebuffer_info)
             .expect("Failed to initialize framebuffer");
 
         // Initialize the terminal for text output.
         // The terminal takes ownership of the framebuffer, so we cannot use it directly anymore after this point.
         // If you want to experiment with the framebuffer, do it before this line or comment this line out.
         // However, the `print!()` and `println!()` macros will not work then.
-        terminal::init_terminal(framebuffer);
+
+        crate::allocator::global::init_allocator(
+            crate::consts::heap_start(),
+            crate::consts::HEAP_SIZE
+        );
+
+        if let Some(module_tag) = multiboot.find_tag::<multiboot::ModuleTag>(multiboot::TagType::Module) {
+            let archive = tar_no_std::TarArchiveRef::new(module_tag.as_slice()).expect("Failed to parse TAR archive");
+            crate::filesystem::tarfs::init_filesystem(archive);
+        }
+        match crate::library::bitmap::Bitmap::read_from_file("heine.bmp") {
+            Ok(Some(bitmap)) => {
+                info!("Bitmap geladen! Größe: {}x{}", bitmap.width(), bitmap.height());
+                framebuffer.draw_bitmap(&bitmap, 0, 0);
+                info!("Bitmap auf Framebuffer gezeichnet.");
+            },
+            Ok(None) => error!("Bitmap 'heine.bmp' nicht gefunden oder ungültiges Format!"),
+            Err(e) => error!("Fehler beim Zugriff auf das Filesystem für 'heine.bmp'"),
+        }
+       terminal::init_terminal(framebuffer);
 
         if let Some(cmdline) = multiboot.find_tag::<multiboot::CommandLineTag>(multiboot::TagType::CommandLine) {
             let command_line = cmdline.as_str();
@@ -112,10 +132,10 @@
         // Load the Global Descriptor Table (code in boot.asm)
         unsafe { load_gdt(); }
 
-        crate::allocator::global::init_allocator(
-            crate::consts::heap_start(),
-            crate::consts::HEAP_SIZE
-        );
+      //  crate::allocator::global::init_allocator(
+        //    crate::consts::heap_start(),
+          //  crate::consts::HEAP_SIZE
+       // );
 
         info!("Initialisiere Interrupt Dispatcher...");
         crate::interrupt::dispatcher::init_interrupt_dispatcher();
@@ -145,7 +165,9 @@
         // crate::demo::lesson2::speaker_demo();
         // crate::demo::lesson2::heap_demo();
         // crate::demo::lesson4::coroutine_demo();
-        crate::demo::lesson4::thread_demo();
+       // crate::demo::lesson4::thread_demo();
+       crate::demo::lesson6::peanut_gb::play("roms/2048.gb");// Ich rufe es wo anders auf
+
         loop {}
     }
 
