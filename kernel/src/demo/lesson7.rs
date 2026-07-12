@@ -8,6 +8,7 @@ use crate::device::cpu::IoPort;
 use crate::device::pci::{pci_bus, Command};
 use crate::device::terminal::terminal;
 use crate::library::input;
+use crate::{print, println};
 
 pub fn print_pci_devices() {
     terminal().lock().clear();

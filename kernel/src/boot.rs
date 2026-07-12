@@ -166,8 +166,9 @@
         // crate::demo::lesson2::heap_demo();
         // crate::demo::lesson4::coroutine_demo();
        // crate::demo::lesson4::thread_demo();
-       crate::demo::lesson6::peanut_gb::play("roms/2048.gb");// Ich rufe es wo anders auf
-
+       //crate::demo::lesson6::peanut_gb::play("roms/2048.gb");// Ich rufe es wo anders auf
+       // crate::demo::lesson7::print_pci_devices();
+        crate::demo::lesson7::rtl8139_demo();
         loop {}
     }
 
