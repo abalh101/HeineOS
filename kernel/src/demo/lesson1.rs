@@ -25,10 +25,7 @@ pub fn keyboard_demo() {
     println!("");
 
     loop {
-        // Blockieren bis ein Event eintritt
         let event = KEYBOARD.lock().poll_key_event();
-
-        //  {:?} Formatter gibt die gesamte KeyEvent Struktur automatisch
         println!("{:?}", event);
     }
 }

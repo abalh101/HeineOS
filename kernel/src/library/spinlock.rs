@@ -21,7 +21,7 @@ pub struct Spinlock<T> {
     /// but the `Spinlock` itself ensures that only one thread can access the data at a time.
     data: UnsafeCell<T>,
 }
-// static mutable variables are not allowed in rust beacuae they are not threadsafe  -> braucht unsafe block
+// static mutable variables are not allowed in rust beacuae they are not threadsafe  -> neds unsafe block
 
 unsafe impl<T> Sync for Spinlock<T> where T: Send {}
 unsafe impl<T> Send for Spinlock<T> where T: Send {}
@@ -56,7 +56,6 @@ impl<T> Spinlock<T> {
         //       Use `try_lock()` repeatedly and only return, once the lock is successfully acquired.
        // SpinlockGuard { lock: self }
         loop {
-            //Versuchen das lock zu bekommen
             if let Some(guard) = self.try_lock() {
                 return guard;
             }

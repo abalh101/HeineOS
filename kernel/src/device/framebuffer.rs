@@ -164,7 +164,6 @@ impl Framebuffer {
     /// The freed space at the bottom is cleared to black.
     pub fn scroll_up(&mut self, lines: usize) {
         let bytes_per_row = self.pitch;
-        //Bytes verschoben Anzahl Pixelzeilen * Bytes pro Zeile
         let offset_bytes = lines * bytes_per_row;
         let total_bytes = self.height * bytes_per_row;
         if offset_bytes >= total_bytes {

@@ -83,28 +83,25 @@ pub extern "C" fn main(multiboot_magic: u32, multiboot: &multiboot::BootInfo) ->
     unsafe { load_gdt(); }
 
     // TODO: Call your demo code here.
-    COM1.lock().write_str("Hello World"); // Aufruf der andren Methode
+    
+    //lesson1
+    //COM1.lock().write_str("Hello World"); // Aufruf der andren Methode
     //COM1.lock().write_byte('H' as u8);
-
-
-   // info!("Locking erstmal");
+    // info!("Locking erstmal");
     //let _lock1 = COM1.lock();
-   // info!("erfolgreich! noch einmal deadlock ");
-
+    // info!("erfolgreich! noch einmal deadlock ");
     //let _lock2 = COM1.lock(); sonst bootet das system nicht weit genug
 
     // Diese Zeile sieht man im -Terminal niemals
     //The unwrap() function simply checks if the Result is Ok and panics otherwise.
     //info!("niemals bis hier!");
 
-    for _ in 0..35 {
+   /* for _ in 0..35 {
        println!("Hello, World!");
     }
-
+*/
    // demo::lesson1::text_demo();
-
    // crate::demo::lesson1::keyboard_demo();
-
     // Endless loop, as we cannot return from main().
     loop {}
 }

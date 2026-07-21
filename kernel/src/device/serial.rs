@@ -83,19 +83,16 @@ impl ComPort {
             self.line_control_port.outb(0x03);
         }
     }
-
+    /// Write a single byte to the COM port.
     pub fn write_byte(&mut self, byte: u8) {
         if byte == b'\n' {
-            unsafe { // ohne unsafe klappt es nicht vllt ist I/O port als unsafe makriert
-                // Warten,das der port bereit ist
+            unsafe {
                 while (self.line_status_port.inb() & LineStatus::READY_TO_WRITE.bits()) == 0 {
-                    // solange das bit noch nicht gesetzt ist == 0 warten
                 }
                 self.data_port.outb(b'\r');
             }
         }
         unsafe {
-            // Sobald ein Bit gesetzt nicht mehr null
             while (self.line_status_port.inb() & LineStatus::READY_TO_WRITE.bits()) == 0 {
             }
             self.data_port.outb(byte);
@@ -108,6 +105,7 @@ impl ComPort {
 // This allows formatted output via the `write_fmt()` method provided by the `fmt::Write` trait.
 impl fmt::Write for ComPort {
     fn write_str(&mut self, s: &str) -> fmt::Result {
+        // i can use the method write in loop
         for byte in s.bytes() {
             self.write_byte(byte);
         }
