@@ -37,9 +37,10 @@ condition = { files_modified = { input = [
 command = "nasm"
 args = [ "-f", "elf64", "-w+error=label-redef-late", "-o", "${ASM_OBJECT}", "${SOURCE_DIRECTORY}/boot.asm",
    #Zusatzaufgabe 6
-    "-serial", "stdio",
-    "-serial", "none",
-    "-serial", "file:gameboy.sav", ]
+   # "-serial", "stdio",
+   # "-serial", "none",
+   # "-serial", "file:gameboy.sav",
+]
 condition = { files_modified = { input = [
     "${SOURCE_DIRECTORY}/boot.asm"
 ], output = [

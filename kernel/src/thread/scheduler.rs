@@ -136,10 +136,19 @@ impl Scheduler {
 
     //5.5
     pub fn cleanup_terminated_threads(&self) {
+        loop {
+            let thread = {
+                let mut state = self.state.lock();
+                state.terminated_threads.dequeue()
+            };
 
-        let mut state = self.state.lock();
-        while let Some(_thread) = state.terminated_threads.dequeue() {
-            info!("Thread resource cleaned up");
+            match thread {
+                Some(thread) => {
+                    drop(thread);
+                    info!("Thread resource cleaned up");
+                }
+                None => break,
+            }
         }
     }
 /* in Aufgabe 5.3 ersetzt
@@ -193,7 +202,8 @@ impl Scheduler {
         let removed = state.ready_queue.remove(|thread| thread.id() == to_kill_id);
 
         if !removed {
-            log::warn!("WARNUNG: Thread {} konnte nicht gekillt werden (nicht in Queue).", to_kill_id);        }
+            log::warn!("WARNING: Thread {} could not be killed (not in queue).", to_kill_id);
+        }
     }
 }
 

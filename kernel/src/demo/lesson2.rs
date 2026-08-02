@@ -25,13 +25,13 @@ pub fn heap_demo() {
     dump_free_list();
 
     println!("Allocating a Box on the Heap...");
-    let x = Box::new(42); /// struct allokieren
+    let x = Box::new(42);
     println!("Box contains: {}", x);
 
     dump_free_list();
 
     println!("Allocating a dynamic Vector (Vec)...");
-    let mut v = Vec::new(); // Array allokieren
+    let mut v = Vec::new();
     for i in 0..5 {
         v.push(i);
     }
@@ -48,9 +48,9 @@ pub fn heap_demo() {
 
     println!("--- Heap Demo End ---");
 
-  //  println!("versuche Array zu erstellen, der größer ist als unser gesamter Heap...");
-    //let massive_array = Box::new([0u8; 17 * 1024 * 1024]);
-   // println!("Erfolg!");
+    //  println!("trying to create an array that is larger than our entire heap...");
+    // let massive_array = Box::new([0u8; 17 * 1024 * 1024]);
+    // println!("Donee!!");
 }
 
 /// A demo that plays songs via the PC speaker.

@@ -98,7 +98,6 @@ impl Speaker {
             self.pit_data2_port.outb((divisor >> 8) as u8);
         }
 
-        // sprecher an,warten,sprecher aus.
         self.on();
        // self.delay(duration);
         wait(duration);
@@ -141,12 +140,10 @@ impl Speaker {
     fn delay(&mut self, duration: usize) {
 
         unsafe {
-            // Konfiguriere PIT Kanal 0 für das Delay:
-            // 0x34 = Channel 0, Access Loby/Hiby, Mode 2 (Rate Generator), Binary
+
             self.pit_ctrl_port.outb(0x34);
-            // Wir schreiben den Reload-Wert 1193 (0x04a9) in Kanal 0. Das entspricht exakt 1ms.
-            self.pit_data0_port.outb(0xa9); // Low Byte
-            self.pit_data0_port.outb(0x04); // High Byte
+            self.pit_data0_port.outb(0xa9);
+            self.pit_data0_port.outb(0x04);
         }
 
         let mut elapsed_ms = 0;

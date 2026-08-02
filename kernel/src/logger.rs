@@ -13,7 +13,7 @@ use log::{Metadata, Record};
 use crate::device::serial;
 use crate::println;
 
-//use crate::println; //  Damit wir auf den Bildschirm drucken kann
+//use crate::println;
 //use crate::println;
 /// A simple logger implementing the `log::Log` trait, writing to the serial port (COM1) and optionally the terminal.
 pub struct Logger {

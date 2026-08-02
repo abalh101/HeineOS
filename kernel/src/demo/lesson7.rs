@@ -4,6 +4,7 @@
  * Author: Fabian Ruhland, Heinrich Heine University Duesseldorf, 2026-04-02
  * License: GPLv3
  */
+
 use crate::device::cpu::IoPort;
 use crate::device::pci::{pci_bus, Command};
 use crate::device::terminal::terminal;

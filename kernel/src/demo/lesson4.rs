@@ -92,8 +92,6 @@ fn thread_entry() {
 
     let start_time = system_time();
     let target = 1000;
-
-    //Thread erreichen es auch in kurzer zeit etwa ein Dritttel
     //let target = 15000;
 
 

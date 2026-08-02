@@ -66,7 +66,6 @@ impl LinkedListAllocator {
 
     /// Adds the given free memory block 'addr' to the front of the free list.
    /* unsafe fn add_free_block(&mut self, addr: usize, size: usize) {
-        // Wir erstellen einen neuen Knoten an der Adresse des freigewordenen Speichers
         let mut node = ListNode::new(size);
         node.next = self.head.next.take();
         let node_ptr = addr as *mut ListNode;
@@ -87,7 +86,7 @@ impl LinkedListAllocator {
         }
 
         let mut new_size = size;
-        let mut next_ptr = current.next.take(); // Wir nemen den rechten Nachbar kurz aus der Liste
+        let mut next_ptr = current.next.take();
 
         if let Some(mut next_node) = next_ptr {
             if addr + size == next_node.start_addr() {
@@ -114,7 +113,6 @@ impl LinkedListAllocator {
     fn find_free_block(&mut self, size: usize, align: usize) -> Option<(&'static mut ListNode, usize)> {
         let mut current = &mut self.head;
 
-        // Wir wandern die Liste ab, bis wir einen passenden Block finden
         while let Some(ref mut region) = current.next {
             if let Ok(alloc_start) = Self::check_block_for_alloc(&region, size, align) {
                 let next = region.next.take();

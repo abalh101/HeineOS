@@ -89,11 +89,19 @@ impl ISR for TimerISR {
             let spin_index = (new_time / 250) % 4;
             let current_char = SPINNER_CHARS[spin_index];
 
-            if let Some(mut term) = crate::device::terminal::terminal().try_lock() {
-                let old_pos = term.pos();
-                term.set_pos(999, 0);
-                term.put_char_colored(current_char, framebuffer::WHITE, framebuffer::BLACK);
-                term.set_pos(old_pos.0, old_pos.1);
+            if let Some(mut fb) =
+                crate::device::terminal::framebuffer().try_lock()
+            {
+                let x = fb.width()
+                    .saturating_sub(framebuffer::CHAR_WIDTH);
+
+                fb.draw_char(
+                    current_char,
+                    x,
+                    0,
+                    framebuffer::WHITE,
+                    framebuffer::BLACK
+                );
             }
         }
         if new_time % 10 == 0 {

@@ -91,15 +91,15 @@
             let archive = tar_no_std::TarArchiveRef::new(module_tag.as_slice()).expect("Failed to parse TAR archive");
             crate::filesystem::tarfs::init_filesystem(archive);
         }
-        match crate::library::bitmap::Bitmap::read_from_file("heine.bmp") {
+      /*  match crate::library::bitmap::Bitmap::read_from_file("heine.bmp") {
             Ok(Some(bitmap)) => {
-                info!("Bitmap geladen! Größe: {}x{}", bitmap.width(), bitmap.height());
+                info!("Bitmap loaded! Size: {}x{}", bitmap.width(), bitmap.height());
                 framebuffer.draw_bitmap(&bitmap, 0, 0);
-                info!("Bitmap auf Framebuffer gezeichnet.");
+                info!("Bitmap drawn to framebuffer.");
             },
-            Ok(None) => error!("Bitmap 'heine.bmp' nicht gefunden oder ungültiges Format!"),
-            Err(e) => error!("Fehler beim Zugriff auf das Filesystem für 'heine.bmp'"),
-        }
+            Ok(None) => error!("Bitmap 'heine.bmp' not found or invalid format!"),
+            Err(e) => error!("Error accessing the filesystem for 'heine.bmp'"),
+        }*/
        terminal::init_terminal(framebuffer);
 
         if let Some(cmdline) = multiboot.find_tag::<multiboot::CommandLineTag>(multiboot::TagType::CommandLine) {
@@ -168,8 +168,11 @@
        // crate::demo::lesson4::thread_demo();
        //crate::demo::lesson6::peanut_gb::play("roms/2048.gb");// Ich rufe es wo anders auf
        // crate::demo::lesson7::print_pci_devices();
-        crate::demo::lesson7::rtl8139_demo();
-        loop {}
+       // crate::demo::lesson7::rtl8139_demo();
+      //  crate::demo::snake::play();
+
+        crate::demo::menu::run();
+        //loop {}
     }
 
     /// Exit UEFI boot services.

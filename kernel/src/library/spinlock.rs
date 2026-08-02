@@ -56,7 +56,6 @@ impl<T> Spinlock<T> {
         //       Use `try_lock()` repeatedly and only return, once the lock is successfully acquired.
        // SpinlockGuard { lock: self }
         loop {
-            //Versuchen das lock zu bekommen
             if let Some(guard) = self.try_lock() {
                 return guard;
             }

@@ -34,9 +34,6 @@ impl ISR for KeyboardISR {
     /// Keyboard interrupt handler.
    // fn trigger(&self) {
      //   log::debug!("Keyboard interrupt handler triggered");
-
-        // (In der nächsten Aufgabe werden wir hier die Scancodes auslesen
-        // und in den KEYBOARD_BUFFER pushen!)
     //}
     fn trigger(&self) {
         let mut keyboard = KEYBOARD.lock();
@@ -52,14 +49,10 @@ impl ISR for KeyboardISR {
 /// Register the keyboard interrupt handler with the interrupt dispatcher
 /// and enable keyboard interrupts at the PIC.
 pub fn plugin() {
-    // 1. Tastatur beim Interrupt-Dispatcher (Vector 33) anmelden
     INT_VECTORS.lock().register(InterruptVector::Keyboard, Box::new(KeyboardISR));
-
-    // 2. PIC erlauben, das Signal durchzulassen
     PIC.lock().allow(Irq::Keyboard);
 
-    log::info!("Tastatur-Interrupt beim PIC aktiviert und registriert.");
-}
+    log::info!("Keyboard interrupt enabled and registered at the PIC.");}
 
 /// The global keyboard instance protected by a spinlock.
 static KEYBOARD: Spinlock<Keyboard> = Spinlock::new(Keyboard::new());

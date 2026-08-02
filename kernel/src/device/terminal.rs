@@ -124,7 +124,6 @@ impl Terminal {
     pub fn put_char_colored(&mut self, c: char, fg_color: u32, bg_color: u32) {
         let mut fb = self.framebuffer.lock();
 
-        // 1. Alten Cursor an der aktuellen Position entfernen
         Terminal::clear_cursor(self.pos, &mut fb);
         if c == '\n' {
             self.pos.0 = 0;
